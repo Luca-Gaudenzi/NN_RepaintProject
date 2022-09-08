@@ -28,6 +28,8 @@ import conf_mgt
 from utils import yamlread
 from guided_diffusion import dist_util
 
+
+#inserito per impedire utilizzo CPU
 import os
 os.environ['CUDA_VISIBLE_DEVICES']='2, 3'
 
@@ -72,13 +74,13 @@ def main(conf: conf_mgt.Default_Conf):
     model, diffusion = create_model_and_diffusion(
         **select_args(conf, model_and_diffusion_defaults().keys()), conf=conf
     )
-    #penso per leggere le
+    
     model.load_state_dict(
         dist_util.load_state_dict(os.path.expanduser(
             conf.model_path), map_location="cpu")
     )
     model.to(device)
-    if conf.use_fp16:
+    if conf.use_fp16:  #nel faceexample.yml è false
         model.convert_to_fp16()
     model.eval() #we test the model (not training)
 
@@ -149,11 +151,11 @@ def main(conf: conf_mgt.Default_Conf):
             )
             model_kwargs["y"] = classes
 
-        sample_fn = (
+        sample_fn = (#nel face_example, conf.use_ddim è false quindi sample_fn è diffusion.p_sample_loop
             diffusion.p_sample_loop if not conf.use_ddim else diffusion.ddim_sample_loop
         )
 
-
+        # chiamata a sample_fn (guarda albero delle chiamata)
         result = sample_fn(
             model_fn,
             (batch_size, 3, conf.image_size, conf.image_size),

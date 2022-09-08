@@ -174,7 +174,7 @@ class GaussianDiffusion:
         beta = _extract_into_tensor(self.betas, t, img_out.shape)
 
         img_in_est = th.sqrt(1 - beta) * img_out + \
-            th.sqrt(beta) * th.randn_like(img_out)      #xt ----  sqrt(1-beta)xt-1 + sqrt(beta)I
+            th.sqrt(beta) * th.randn_like(img_out)      #xt ----  sqrt(1-beta)xt-1 + sqrt(beta)I  (equazione 1 del paper)
 
         return img_in_est
 
@@ -294,11 +294,11 @@ class GaussianDiffusion:
 
     def _predict_xstart_from_eps(self, x_t, t, eps):
         assert x_t.shape == eps.shape
-        #MA A QUALE EQUAZIONE SI RIFERISCE????
+        #MA A QUALE EQUAZIONE SI RIFERISCE????  forse l'inversa della 7 del paper (ma non torna)
         return (
             _extract_into_tensor(
                 self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t  #1/sqrt(alpha_prod) *xt 
-            - _extract_into_tensor(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * eps    #sqrt(1-(alpha_prod-1)) * eps
+            - _extract_into_tensor(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * eps    #sqrt(1/(alpha_prod-1)) * eps
         )
 
     def condition_mean(self, cond_fn, p_mean_var, x, t, model_kwargs=None):
@@ -353,16 +353,16 @@ class GaussianDiffusion:
         """
         noise = th.randn_like(x)
 
-        if conf.inpa_inj_sched_prev: #nella configurazione del faceexample è true
+        if conf.inpa_inj_sched_prev: #nella configurazione del face_example è true
 
-            if pred_xstart is not None:
+            if pred_xstart is not None:  #None solo alla prima chiamata da parte di p_sample_loop_progressive
                 gt_keep_mask = model_kwargs.get('gt_keep_mask')
                 if gt_keep_mask is None:
                     gt_keep_mask = conf.get_inpa_mask(x)
 
                 gt = model_kwargs['gt'] #questo dovrebbe essere x0
 
-                alpha_cumprod = _extract_into_tensor(
+                alpha_cumprod = _extract_into_tensor(   
                     self.alphas_cumprod, t, x.shape)
 
                 if conf.inpa_inj_sched_prev_cumnoise:  #nel face_example è false
@@ -388,7 +388,7 @@ class GaussianDiffusion:
                 )
 
 
-        out = self.p_mean_variance(
+        out = self.p_mean_variance(  #here we apply the model
             model,
             x,
             t,
@@ -508,6 +508,7 @@ class GaussianDiffusion:
         sample_idxs = defaultdict(lambda: 0)
 
         if conf.schedule_jump_params:
+            #otteniamo lo schedule dei timestamp (utilizzato per capire quando fare reverse o forward step)
             times = get_schedule_jump(**conf.schedule_jump_params)
 
             time_pairs = list(zip(times[:-1], times[1:]))
@@ -535,7 +536,7 @@ class GaussianDiffusion:
                             pred_xstart=pred_xstart
                         )
                         image_after_step = out["sample"]
-                        pred_xstart = out["pred_xstart"]
+                        pred_xstart = out["pred_xstart"]  # da notare che è un paramentro di p_sample, alla prima chiamata di p_sample è None
 
                         sample_idxs[t_cur] += 1
 
