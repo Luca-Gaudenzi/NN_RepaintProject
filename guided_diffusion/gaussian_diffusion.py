@@ -125,7 +125,7 @@ class GaussianDiffusion:
         self.conf = conf
 
         # Use float64 for accuracy.
-        betas = np.array(betas, dtype=np.float64)
+        betas = np.array(betas, dtype=np.float64)#variance schedule (used in diffusion step)
         self.betas = betas
         assert len(betas.shape) == 1, "betas must be 1-D"
         assert (betas > 0).all() and (betas <= 1).all()
@@ -133,12 +133,12 @@ class GaussianDiffusion:
         self.num_timesteps = int(betas.shape[0])
 
         alphas = 1.0 - betas
-        self.alphas_cumprod = np.cumprod(alphas, axis=0)
-        self.alphas_cumprod_prev = np.append(1.0, self.alphas_cumprod[:-1])
+        self.alphas_cumprod = np.cumprod(alphas, axis=0) #cumprod di [1,2,3] è [1,2*1,3*2*1]
+        self.alphas_cumprod_prev = np.append(1.0, self.alphas_cumprod[:-1]) #mette 1.0 in testa togliendo l'ultimo
         self.alphas_cumprod_prev_prev = np.append(
-            1.0, self.alphas_cumprod_prev[:-1])
+            1.0, self.alphas_cumprod_prev[:-1])   #mette 1.0 in testa togliendo l'ultimo
 
-        self.alphas_cumprod_next = np.append(self.alphas_cumprod[1:], 0.0)
+        self.alphas_cumprod_next = np.append(self.alphas_cumprod[1:], 0.0) #mettendo 0.0 in coda togliendo il primo
 
         assert self.alphas_cumprod_prev.shape == (self.num_timesteps,)
 
@@ -242,15 +242,23 @@ class GaussianDiffusion:
         assert model_output.shape == (B, C * 2, *x.shape[2:])
         model_output, model_var_values = th.split(model_output, C, dim=1)
 
-        if self.model_var_type == ModelVarType.LEARNED:
+
+        #FARE CHECK PER ModelVarType
+        #in pratica ModelVarType è un paramentro del modello che ti dice come viene riportato
+            #il valore della varianza
+        
+    
+        if self.model_var_type == ModelVarType.LEARNED:#è false nel nostro caso(varianza riportata sottoforma di valore numerico)
+
             model_log_variance = model_var_values
             model_variance = th.exp(model_log_variance)
-        else:
+        else:#è true nel nostro caso (varianza riportata come intervallo)
+            
+
             min_log = _extract_into_tensor(
                 self.posterior_log_variance_clipped, t, x.shape
             )
-            #POTREBBE, NON NE SONO SICURO PERò ESSERE LA QUESTIONE DELLA VARIANZA CHE VARIA LUNGO LE ITERAZIONI
-            #ALL'INTERNO DI DUE VALORI
+            
             max_log = _extract_into_tensor(np.log(self.betas), t, x.shape)
             frac = (model_var_values + 1) / 2
             model_log_variance = frac * max_log + (1 - frac) * min_log
@@ -263,15 +271,18 @@ class GaussianDiffusion:
                 return x.clamp(-1, 1)
             return x
 
-        if self.model_mean_type == ModelMeanType.PREVIOUS_X:
+        if self.model_mean_type == ModelMeanType.PREVIOUS_X:#nel nostro caso false
+            
             pred_xstart = process_xstart(
                 self._predict_xstart_from_xprev(x_t=x, t=t, xprev=model_output)
             )
             model_mean = model_output
-        elif self.model_mean_type in [ModelMeanType.START_X, ModelMeanType.EPSILON]:
-            if self.model_mean_type == ModelMeanType.START_X:
+        elif self.model_mean_type in [ModelMeanType.START_X, ModelMeanType.EPSILON]:#nel nostro caso true
+            if self.model_mean_type == ModelMeanType.START_X:#nel nostro caso false
+                
                 pred_xstart = process_xstart(model_output)
-            else:
+            else:#nel nostro caso true
+                
                 pred_xstart = process_xstart(
                     self._predict_xstart_from_eps(x_t=x, t=t, eps=model_output)
                 )
@@ -405,10 +416,12 @@ class GaussianDiffusion:
             out["mean"] = self.condition_mean(
                 cond_fn, out, x, t, model_kwargs=model_kwargs
             )
-
+        #equazione 8b
         sample = out["mean"] + nonzero_mask * \
-            th.exp(0.5 * out["log_variance"]) * noise
-
+            th.exp(0.5 * out["log_variance"]) * noise   #media + nonzero_mask *  sqrt(variance) * noise
+                                                            #th.exp(0.5 * out["log_variance"]) è sqrt(variance)
+        #sample è image_after_step, da cui prendiamo xt-1
+        #quindi in pratica l'equazione sopra è la 8b
         result = {"sample": sample,
                   "pred_xstart": out["pred_xstart"], 'gt': model_kwargs.get('gt')}
 
