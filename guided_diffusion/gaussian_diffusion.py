@@ -187,16 +187,14 @@ class GaussianDiffusion:
         """
         assert x_start.shape == x_t.shape
         posterior_mean = (
-            _extract_into_tensor(self.posterior_mean_coef1, #betas * sqrt(alphaprod)/(1-alphaprod) * x0
+            _extract_into_tensor(self.posterior_mean_coef1, 
                                  t, x_t.shape) * x_start
-            #(1.0 - self.alphas_cumprod_prev)* np.sqrt(alphas)/ (1.0 - self.alphas_cumprod)
             + _extract_into_tensor(self.posterior_mean_coef2,
                                    t, x_t.shape) * x_t
         )
         posterior_variance = _extract_into_tensor(
-            self.posterior_variance, t, x_t.shape)#betas * (1.0 - self.alphas_cumprod_prev) /(1.0 - self.alphas_cumprod)
+            self.posterior_variance, t, x_t.shape)
         
-        #np.log(np.append(self.posterior_variance[1], self.posterior_variance[1:])
         posterior_log_variance_clipped = _extract_into_tensor(
             self.posterior_log_variance_clipped, t, x_t.shape
         )
@@ -206,6 +204,7 @@ class GaussianDiffusion:
             == posterior_log_variance_clipped.shape[0]
             == x_start.shape[0]
         )
+        #a noi interessa solo il posterior_mean (gli altri valori non li utilizziamo)
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
     def p_mean_variance(
@@ -265,6 +264,7 @@ class GaussianDiffusion:
             model_variance = th.exp(model_log_variance)
 
         def process_xstart(x):
+            #DA ANALIZZARE
             if denoised_fn is not None:
                 x = denoised_fn(x)
             if clip_denoised:
@@ -305,11 +305,14 @@ class GaussianDiffusion:
 
     def _predict_xstart_from_eps(self, x_t, t, eps):
         assert x_t.shape == eps.shape
-        #MA A QUALE EQUAZIONE SI RIFERISCE????  forse l'inversa della 7 del paper (ma non torna)
+        #è equazione inversa della 7 (x0 in funzione di xt)
+        #xt = sqrt(alphas_cumprod) * x0  + sqrt(1-alphas_cumprod) * eps
+        #da cui
+        #x0 = xt/sqrt(alphas_cumprod) -  sqrt(1/alphas_cumprod  - 1) * eps
         return (
             _extract_into_tensor(
-                self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t  #1/sqrt(alpha_prod) *xt 
-            - _extract_into_tensor(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * eps    #sqrt(1/(alpha_prod-1)) * eps
+                self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t  
+            - _extract_into_tensor(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * eps    
         )
 
     def condition_mean(self, cond_fn, p_mean_var, x, t, model_kwargs=None):
