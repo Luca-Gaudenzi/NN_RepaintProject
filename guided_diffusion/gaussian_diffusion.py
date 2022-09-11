@@ -142,8 +142,8 @@ class GaussianDiffusion:
 
         assert self.alphas_cumprod_prev.shape == (self.num_timesteps,)
 
-        self.sqrt_alphas_cumprod = np.sqrt(self.alphas_cumprod)
-        self.sqrt_alphas_cumprod_prev = np.sqrt(self.alphas_cumprod_prev)
+        self.sqrt_alphas_cumprod = np.sqrt(self.alphas_cumprod) # alfa t
+        self.sqrt_alphas_cumprod_prev = np.sqrt(self.alphas_cumprod_prev) # alfa t-1
         self.sqrt_one_minus_alphas_cumprod = np.sqrt(1.0 - self.alphas_cumprod)
         self.log_one_minus_alphas_cumprod = np.log(1.0 - self.alphas_cumprod)
         self.sqrt_recip_alphas_cumprod = np.sqrt(1.0 / self.alphas_cumprod)
@@ -157,11 +157,11 @@ class GaussianDiffusion:
         self.posterior_log_variance_clipped = np.log(
             np.append(self.posterior_variance[1], self.posterior_variance[1:])
         )
-        self.posterior_mean_coef1 = (
+        self.posterior_mean_coef1 = ( #x start
             betas * np.sqrt(self.alphas_cumprod_prev) /
             (1.0 - self.alphas_cumprod)
-        )
-        self.posterior_mean_coef2 = (
+        )# +
+        self.posterior_mean_coef2 = (  #xt
             (1.0 - self.alphas_cumprod_prev)
             * np.sqrt(alphas)
             / (1.0 - self.alphas_cumprod)
@@ -179,6 +179,7 @@ class GaussianDiffusion:
         return img_in_est
 
     def q_posterior_mean_variance(self, x_start, x_t, t):
+        
         """
         Compute the mean and variance of the diffusion posterior:
 
@@ -186,15 +187,22 @@ class GaussianDiffusion:
 
         """
         assert x_start.shape == x_t.shape
+        #in teoria utilizzato dalla funzione chiamante (anche se non
+        #  ho la più pallida idea di come possa essere uscita fuori questa equazione.)
+
+
+        # magia, ma sappiamo da dove proviene
         posterior_mean = (
             _extract_into_tensor(self.posterior_mean_coef1, 
                                  t, x_t.shape) * x_start
             + _extract_into_tensor(self.posterior_mean_coef2,
                                    t, x_t.shape) * x_t
         )
+        #in teoria NON utilizzato dalla funzione chiamante
         posterior_variance = _extract_into_tensor(
             self.posterior_variance, t, x_t.shape)
-        
+
+        #in teoria NON utilizzato dalla funzione chiamante
         posterior_log_variance_clipped = _extract_into_tensor(
             self.posterior_log_variance_clipped, t, x_t.shape
         )
@@ -268,7 +276,7 @@ class GaussianDiffusion:
             if denoised_fn is not None:
                 x = denoised_fn(x)
             if clip_denoised:
-                return x.clamp(-1, 1)
+                return x.clamp(-1, 1)   #dovrebbe esseguire questa, forse mappa x tra -1 e 1
             return x
 
         if self.model_mean_type == ModelMeanType.PREVIOUS_X:#nel nostro caso false

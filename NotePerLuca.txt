@@ -1,2 +1,2 @@
-1) riguardare p_mean_variance
+1) riguardare p_mean_variance (FATTO)
 2) vedere cosa è lo slowing down nel DDPM
