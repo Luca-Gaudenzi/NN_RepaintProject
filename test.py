@@ -177,7 +177,7 @@ def main(conf: conf_mgt.Default_Conf):
         conf.eval_imswrite(
             srs=srs, gts=gts, lrs=lrs, gt_keep_masks=gt_keep_masks,
             img_names=batch['GT_name'], dset=dset, name=eval_name, verify_same=False)
-
+        print("sample complete")
     print("sampling complete")
 
 

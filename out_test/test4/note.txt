@@ -1,0 +1,3 @@
+le immagini sono pulite nelle zone senza variazioni nei pixel
+c'è molto effetto scacchiera nelle zone in cui invece i pixel cambiano molto nella foto originale (vedi sopracciglia, occhi etc.)
+probabilmente incrementando il jumpnsample le immagini escono meglio perché qui c'è un grande bisogno di riempire i pixel mascherati usando i pixel intorno
