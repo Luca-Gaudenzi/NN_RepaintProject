@@ -29,7 +29,7 @@ from utils import yamlread
 from guided_diffusion import dist_util
 
 
-#inserito per impedire utilizzo CPU
+
 import os
 os.environ['CUDA_VISIBLE_DEVICES']='2, 3'
 
@@ -66,26 +66,28 @@ def main(conf: conf_mgt.Default_Conf):
 
     print("Start", conf['name'])
 
-    #used to get the device (in my case CPU)
+    
     device = dist_util.dev(conf.get('device'))
 
 
-    #crea modello e gaussiana per la diffusione
+    #creates model and gaussian for diffusion
     model, diffusion = create_model_and_diffusion(
         **select_args(conf, model_and_diffusion_defaults().keys()), conf=conf
     )
+
     
     model.load_state_dict(
         dist_util.load_state_dict(os.path.expanduser(
             conf.model_path), map_location="cpu")
     )
     model.to(device)
-    if conf.use_fp16:  #nel faceexample.yml è false
+    if conf.use_fp16:  
         model.convert_to_fp16()
     model.eval() #we test the model (not training)
 
     show_progress = conf.show_progress
 
+    #usually we don't use a classifier
     if conf.classifier_scale > 0 and conf.classifier_path:
         print("loading classifier...")
         classifier = create_classifier(
@@ -124,18 +126,22 @@ def main(conf: conf_mgt.Default_Conf):
 
     dl = conf.get_dataloader(dset=dset, dsName=eval_name)
 
+
+    #iteration over all input images
     for batch in iter(dl):
 
         for k in batch.keys():
-            #A torch.Tensor is a multi-dimensional matrix containing elements of a single data type.
+            
             if isinstance(batch[k], th.Tensor):
-                #conversione del th.Tensor ad uno con un device "device"
+                
                 batch[k] = batch[k].to(device)
 
         model_kwargs = {}
 
+        #input image
         model_kwargs["gt"] = batch['GT']
 
+        #input mask
         gt_keep_mask = batch.get('gt_keep_mask')
         if gt_keep_mask is not None:
             model_kwargs['gt_keep_mask'] = gt_keep_mask
@@ -151,11 +157,11 @@ def main(conf: conf_mgt.Default_Conf):
             )
             model_kwargs["y"] = classes
 
-        sample_fn = (#nel face_example, conf.use_ddim è false quindi sample_fn è diffusion.p_sample_loop
+        sample_fn = (#we don't usee ddim_sample_loop, so sample_fn=diffusion.p_sample_loop
             diffusion.p_sample_loop if not conf.use_ddim else diffusion.ddim_sample_loop
         )
 
-        # chiamata a sample_fn (guarda albero delle chiamata)
+        
         result = sample_fn(
             model_fn,
             (batch_size, 3, conf.image_size, conf.image_size),
@@ -167,17 +173,29 @@ def main(conf: conf_mgt.Default_Conf):
             return_all=True,
             conf=conf
         )
-        srs = toU8(result['sample']) #dovrebbe essere l'output
-        gts = toU8(result['gt']) #dovrebbe essere l'immagine originale
+
+        #output
+        srs = toU8(result['sample']) 
+
+        #original image
+        gts = toU8(result['gt']) 
+
+        #masked input
         lrs = toU8(result.get('gt') * model_kwargs.get('gt_keep_mask') + (-1) *
                    th.ones_like(result.get('gt')) * (1 - model_kwargs.get('gt_keep_mask'))) #dovrebbe essere l'immagine con sopra la maschera
 
+        #mask
         gt_keep_masks = toU8((model_kwargs.get('gt_keep_mask') * 2 - 1))
 
+
+        #write of the result on the disk (directory specified in configuration file)
         conf.eval_imswrite(
             srs=srs, gts=gts, lrs=lrs, gt_keep_masks=gt_keep_masks,
             img_names=batch['GT_name'], dset=dset, name=eval_name, verify_same=False)
+        
+        
         print("sample complete")
+
     print("sampling complete")
 
 

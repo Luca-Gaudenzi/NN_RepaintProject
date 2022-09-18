@@ -133,17 +133,17 @@ class GaussianDiffusion:
         self.num_timesteps = int(betas.shape[0])
 
         alphas = 1.0 - betas
-        self.alphas_cumprod = np.cumprod(alphas, axis=0) #cumprod di [1,2,3] è [1,2*1,3*2*1]
-        self.alphas_cumprod_prev = np.append(1.0, self.alphas_cumprod[:-1]) #mette 1.0 in testa togliendo l'ultimo
+        self.alphas_cumprod = np.cumprod(alphas, axis=0) 
+        self.alphas_cumprod_prev = np.append(1.0, self.alphas_cumprod[:-1]) 
         self.alphas_cumprod_prev_prev = np.append(
-            1.0, self.alphas_cumprod_prev[:-1])   #mette 1.0 in testa togliendo l'ultimo
+            1.0, self.alphas_cumprod_prev[:-1])   
 
-        self.alphas_cumprod_next = np.append(self.alphas_cumprod[1:], 0.0) #mettendo 0.0 in coda togliendo il primo
+        self.alphas_cumprod_next = np.append(self.alphas_cumprod[1:], 0.0) 
 
         assert self.alphas_cumprod_prev.shape == (self.num_timesteps,)
 
-        self.sqrt_alphas_cumprod = np.sqrt(self.alphas_cumprod) # alfa t
-        self.sqrt_alphas_cumprod_prev = np.sqrt(self.alphas_cumprod_prev) # alfa t-1
+        self.sqrt_alphas_cumprod = np.sqrt(self.alphas_cumprod) 
+        self.sqrt_alphas_cumprod_prev = np.sqrt(self.alphas_cumprod_prev) 
         self.sqrt_one_minus_alphas_cumprod = np.sqrt(1.0 - self.alphas_cumprod)
         self.log_one_minus_alphas_cumprod = np.log(1.0 - self.alphas_cumprod)
         self.sqrt_recip_alphas_cumprod = np.sqrt(1.0 / self.alphas_cumprod)
@@ -173,8 +173,10 @@ class GaussianDiffusion:
     def _undo(self, img_out, t):
         beta = _extract_into_tensor(self.betas, t, img_out.shape)
 
+
+        #see Equation 1 Repaint Paper
         img_in_est = th.sqrt(1 - beta) * img_out + \
-            th.sqrt(beta) * th.randn_like(img_out)      #xt ----  sqrt(1-beta)xt-1 + sqrt(beta)I  (equazione 1 del paper)
+            th.sqrt(beta) * th.randn_like(img_out)      
 
         return img_in_est
 
@@ -187,22 +189,21 @@ class GaussianDiffusion:
 
         """
         assert x_start.shape == x_t.shape
-        #in teoria utilizzato dalla funzione chiamante (anche se non
-        #  ho la più pallida idea di come possa essere uscita fuori questa equazione.)
+        
 
 
-        # magia, ma sappiamo da dove proviene
+        # See Equation 7 DDPM paper
         posterior_mean = (
             _extract_into_tensor(self.posterior_mean_coef1, 
                                  t, x_t.shape) * x_start
             + _extract_into_tensor(self.posterior_mean_coef2,
                                    t, x_t.shape) * x_t
         )
-        #in teoria NON utilizzato dalla funzione chiamante
+        
         posterior_variance = _extract_into_tensor(
             self.posterior_variance, t, x_t.shape)
 
-        #in teoria NON utilizzato dalla funzione chiamante
+        
         posterior_log_variance_clipped = _extract_into_tensor(
             self.posterior_log_variance_clipped, t, x_t.shape
         )
@@ -212,7 +213,7 @@ class GaussianDiffusion:
             == posterior_log_variance_clipped.shape[0]
             == x_start.shape[0]
         )
-        #a noi interessa solo il posterior_mean (gli altri valori non li utilizziamo)
+        
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
     def p_mean_variance(
@@ -243,6 +244,7 @@ class GaussianDiffusion:
 
         B, C = x.shape[:2]
         assert t.shape == (B,)
+        
         #here we call the model
         model_output = model(x, self._scale_timesteps(t), **model_kwargs)
 
@@ -250,16 +252,15 @@ class GaussianDiffusion:
         model_output, model_var_values = th.split(model_output, C, dim=1)
 
 
-        #FARE CHECK PER ModelVarType
-        #in pratica ModelVarType è un paramentro del modello che ti dice come viene riportato
-            #il valore della varianza
+        
+        #usually self.model_var_type = LEARNED_RANGE
         
     
-        if self.model_var_type == ModelVarType.LEARNED:#è false nel nostro caso(varianza riportata sottoforma di valore numerico)
+        if self.model_var_type == ModelVarType.LEARNED:#usually false
 
             model_log_variance = model_var_values
             model_variance = th.exp(model_log_variance)
-        else:#è true nel nostro caso (varianza riportata come intervallo)
+        else:#usually true
             
 
             min_log = _extract_into_tensor(
@@ -272,28 +273,33 @@ class GaussianDiffusion:
             model_variance = th.exp(model_log_variance)
 
         def process_xstart(x):
-            #DA ANALIZZARE
+            
             if denoised_fn is not None:
                 x = denoised_fn(x)
             if clip_denoised:
-                return x.clamp(-1, 1)   #dovrebbe esseguire questa, forse mappa x tra -1 e 1
+                return x.clamp(-1, 1)   
             return x
 
-        if self.model_mean_type == ModelMeanType.PREVIOUS_X:#nel nostro caso false
+
+        #usually self.model_mean_type = EPSILON
+
+        if self.model_mean_type == ModelMeanType.PREVIOUS_X:#usually false
             
             pred_xstart = process_xstart(
                 self._predict_xstart_from_xprev(x_t=x, t=t, xprev=model_output)
             )
             model_mean = model_output
-        elif self.model_mean_type in [ModelMeanType.START_X, ModelMeanType.EPSILON]:#nel nostro caso true
-            if self.model_mean_type == ModelMeanType.START_X:#nel nostro caso false
+        elif self.model_mean_type in [ModelMeanType.START_X, ModelMeanType.EPSILON]:#usually true
+            if self.model_mean_type == ModelMeanType.START_X:#usually false
                 
                 pred_xstart = process_xstart(model_output)
-            else:#nel nostro caso true
-                
+            else:#usually true
+                #using epsilon, it predicts x0
                 pred_xstart = process_xstart(
                     self._predict_xstart_from_eps(x_t=x, t=t, eps=model_output)
                 )
+
+            #computation of mean used for Equation 8b 
             model_mean, _, _ = self.q_posterior_mean_variance(
                 x_start=pred_xstart, x_t=x, t=t
             )
@@ -313,9 +319,9 @@ class GaussianDiffusion:
 
     def _predict_xstart_from_eps(self, x_t, t, eps):
         assert x_t.shape == eps.shape
-        #è equazione inversa della 7 (x0 in funzione di xt)
+        #See Equation 7 of Repaint paper
         #xt = sqrt(alphas_cumprod) * x0  + sqrt(1-alphas_cumprod) * eps
-        #da cui
+        
         #x0 = xt/sqrt(alphas_cumprod) -  sqrt(1/alphas_cumprod  - 1) * eps
         return (
             _extract_into_tensor(
@@ -375,42 +381,44 @@ class GaussianDiffusion:
         """
         noise = th.randn_like(x)
 
-        if conf.inpa_inj_sched_prev: #nella configurazione del face_example è true
+        if conf.inpa_inj_sched_prev: #usually is true in our configurations
 
-            if pred_xstart is not None:  #None solo alla prima chiamata da parte di p_sample_loop_progressive
+            if pred_xstart is not None:  
                 gt_keep_mask = model_kwargs.get('gt_keep_mask')
                 if gt_keep_mask is None:
                     gt_keep_mask = conf.get_inpa_mask(x)
 
-                gt = model_kwargs['gt'] #questo dovrebbe essere x0
+                #original image (used to compute x0^{known})
+                gt = model_kwargs['gt'] 
 
                 alpha_cumprod = _extract_into_tensor(   
                     self.alphas_cumprod, t, x.shape)
 
-                if conf.inpa_inj_sched_prev_cumnoise:  #nel face_example è false
+                if conf.inpa_inj_sched_prev_cumnoise:  #usually false in our configurations
                     weighed_gt = self.get_gt_noised(gt, int(t[0].item()))
                 else:
-                    #questa l'equazione sette del paper q(xt|x0)=N(xt;sqrt(alpha)*x0,(1-alpha)I)
+                    #Equation 8a of Repaint paper
+                    
                     gt_weight = th.sqrt(alpha_cumprod)  #sqrt(alpha)
                     gt_part = gt_weight * gt    #sqrt(alpha)*x0
 
                     noise_weight = th.sqrt((1 - alpha_cumprod)) #variance
                     noise_part = noise_weight * th.randn_like(x)    #variance effect
 
-                    weighed_gt = gt_part + noise_part   #xt-1 known
-                #equazione 8 del paper
+                    weighed_gt = gt_part + noise_part   #x_{t-1} ^{known}
+                #Equation 8c of Repaint paper
                 x = (
                     gt_keep_mask * (
-                        weighed_gt  #m*xt-1 known
+                        weighed_gt  #m*x_{t-1} ^{known}
                     )
                     +
-                    (1 - gt_keep_mask) * (  #(1-m)*xt-1 unknown
+                    (1 - gt_keep_mask) * (  #(1-m)*x_{t-1} ^{unknown}
                         x
                     )
                 )
                 
 
-
+        #computation of mean and variance used for Equation 8b
         out = self.p_mean_variance(  #here we apply the model
             model,
             x,
@@ -428,12 +436,11 @@ class GaussianDiffusion:
             out["mean"] = self.condition_mean(
                 cond_fn, out, x, t, model_kwargs=model_kwargs
             )
-        #equazione 8b
+        #Equation 8b of Repaint paper
         sample = out["mean"] + nonzero_mask * \
-            th.exp(0.5 * out["log_variance"]) * noise   #media + nonzero_mask *  sqrt(variance) * noise
-                                                            #th.exp(0.5 * out["log_variance"]) è sqrt(variance)
-        #sample è image_after_step, da cui prendiamo xt-1
-        #quindi in pratica l'equazione sopra è la 8b
+            th.exp(0.5 * out["log_variance"]) * noise   
+        
+
         result = {"sample": sample,
                   "pred_xstart": out["pred_xstart"], 'gt': model_kwargs.get('gt')}
 
@@ -492,8 +499,7 @@ class GaussianDiffusion:
         else:
             return final["sample"]
 
-    def p_sample_loop_progressive(  #questa funzione usa lo scheduling dei timestamp (per sapere quando andare
-                #quando andare avanti e indietro
+    def p_sample_loop_progressive(  
         self,
         model,
         shape,
@@ -527,13 +533,13 @@ class GaussianDiffusion:
         self.gt_noises = None  # reset for next image
 
 
-        pred_xstart = None  #dovrebbe essere nullo solo alla prima iterazione
+        pred_xstart = None  
 
         idx_wall = -1
         sample_idxs = defaultdict(lambda: 0)
 
         if conf.schedule_jump_params:
-            #otteniamo lo schedule dei timestamp (utilizzato per capire quando fare reverse o forward step)
+            #computation of diffusion time schedule (used to choiche either forward step or reverse step)
             times = get_schedule_jump(**conf.schedule_jump_params)
 
             time_pairs = list(zip(times[:-1], times[1:]))
@@ -546,7 +552,7 @@ class GaussianDiffusion:
                 t_last_t = th.tensor([t_last] * shape[0],  # pylint: disable=not-callable
                                      device=device)
 
-                if t_cur < t_last:  # reverse
+                if t_cur < t_last:  # reverse step (see Equations 8a, 8b, 8c of Repaint paper)
                     with th.no_grad():
                         image_before_step = image_after_step.clone()
                         out = self.p_sample(
@@ -561,13 +567,13 @@ class GaussianDiffusion:
                             pred_xstart=pred_xstart
                         )
                         image_after_step = out["sample"]
-                        pred_xstart = out["pred_xstart"]  # da notare che è un paramentro di p_sample, alla prima chiamata di p_sample è None
+                        pred_xstart = out["pred_xstart"] 
 
                         sample_idxs[t_cur] += 1
 
                         yield out
 
-                else:
+                else: # reverse step (see Equation 1 of Repaint paper)
                     t_shift = conf.get('inpa_inj_time_shift', 1)
 
                     image_before_step = image_after_step.clone()
