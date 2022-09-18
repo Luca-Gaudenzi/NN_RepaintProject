@@ -408,6 +408,7 @@ class GaussianDiffusion:
                         x
                     )
                 )
+                
 
 
         out = self.p_mean_variance(  #here we apply the model
