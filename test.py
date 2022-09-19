@@ -31,7 +31,7 @@ from guided_diffusion import dist_util
 
 
 import os
-os.environ['CUDA_VISIBLE_DEVICES']='2, 3'
+
 
 
 # Workaround
