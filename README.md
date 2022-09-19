@@ -3,7 +3,8 @@
 
 
 
-This git was clone from https://github.com/andreas128/RePaint
+This repository was created by Giulia Neccia e Luca Gaudenzi for the Neural Networks exam.
+This git was cloned from https://github.com/andreas128/RePaint
 ## Setup
 
 ### 1. Code
